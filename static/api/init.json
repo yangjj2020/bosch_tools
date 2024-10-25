@@ -1,0 +1,67 @@
+{
+  "homeInfo": {
+    "title": "首页",
+    "href": "/welcome"
+  },
+  "logoInfo": {
+    "title": "BOSCH Tools",
+    "image": "/static/images/bosch.png",
+    "href": ""
+  },
+  "menuInfo": [
+    {
+      "title": "常规管理",
+      "icon": "fa fa-address-book",
+      "href": "",
+      "target": "_self",
+      "child": [
+        {
+          "title": "芯片温度",
+          "href": "",
+          "icon": "fa fa-home",
+          "target": "_self",
+          "child": [
+            {
+              "title": "数据上传",
+              "href": "temperature/list",
+              "icon": "fa fa-tachometer",
+              "target": "_self"
+            },
+            {
+              "title": "数据概览",
+              "href": "temperature/overview",
+              "icon": "fa fa-tachometer",
+              "target": "_self"
+            },
+            {
+              "title": "数据详情",
+              "href": "temperature/details_page",
+              "icon": "fa fa-tachometer",
+              "target": "_self"
+            }
+          ]
+        },
+        {
+          "title": "测试报告",
+          "href": "",
+          "icon": "fa fa-flag-o",
+          "target": "_self",
+          "child": [
+            {
+              "title": "MST",
+              "href": "report/1",
+              "icon": "fa fa-stumbleupon-circle",
+              "target": "_blank"
+            },
+            {
+              "title": "IOTest",
+              "href": "report/2",
+              "icon": "fa fa-viacoin",
+              "target": "_blank"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
