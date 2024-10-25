@@ -18,14 +18,24 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 def process_file(file_name: str):
+    # 初始化一个字典来存储每个温度区间的总分钟数
+    cur_time_diffs = defaultdict(float)
+    cur_total_minutes = 0
     try:
         logging.info(f"file_name:{file_name}")
 
+        # 读取 CSV 文件的列名
+        column_names = pd.read_csv(file_name, nrows=0).columns.tolist()
+        # 需要检查的列名列表
+        columns_to_check = ['TECU_t']
+        # 检查每个列名是否存在
+        exists = {column: column in column_names for column in columns_to_check}
+        # 检查 'TECU_t' 列是否存在，如果不存在则退出程序
+        if not exists.get('TECU_t', False):
+            return cur_time_diffs, cur_total_minutes
+
         selected_columns_list = ['TECU_t', 'timestamps']
         df: DataFrame = pd.read_csv(file_name, usecols=selected_columns_list)
-
-        # 初始化一个字典来存储每个温度区间的总分钟数
-        cur_time_diffs = defaultdict(float)
 
         # 定义温度区间
         temperature_intervals = list(range(-40, 120, 5))
@@ -49,7 +59,13 @@ def process_file(file_name: str):
     return cur_time_diffs, cur_total_minutes
 
 
-def temperature_duration(selected_file_names: list[str] = None, max_workers=None):
+def temperature_duration(selected_file_ids: list[int] = None, selected_file_names: list[str] = None, max_workers=None):
+    # 将整数列表转换为字符串列表
+    selected_file_ids_str = [str(id) for id in selected_file_ids]
+    # 使用逗号连接字符串列表
+    result = ','.join(selected_file_ids_str)
+    # query_table_by_sql()
+
     # 使用 ThreadPoolExecutor 并行处理每个文件
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         results = list(executor.map(process_file, selected_file_names))
@@ -81,31 +97,51 @@ def get_skiprows(n):
     return lambda x: x % n != 0
 
 
-def temperature_chip(selected_columns: str, csv_path: str):
-    # 将字符串转换为列表
-    selected_columns_list = selected_columns.split(',')
-    df: DataFrame = pd.read_csv(csv_path, usecols=selected_columns_list, skiprows=get_skiprows(1000))
+def temperature_chip(selected_columns: str, csv_path: str) -> Dict[str, List]:
+    try:
+        # 将字符串转换为列表
+        selected_columns_list = selected_columns.split(',')
+        # 读取 CSV 文件的列名
+        column_names = pd.read_csv(csv_path, nrows=0).columns.tolist()
+        # 过滤出 selected_columns_list 中存在的列
+        existing_columns = [col for col in selected_columns_list if col in column_names]
+        logging.debug(f"existing_columns:{existing_columns}")
 
-    if df is None or len(df) < 1:
-        # 返回一个空的 temperature_time 字典
+        if not existing_columns:
+            return {col: [] for col in selected_columns}
+
+        # 读取 CSV 文件并应用过滤
+        df = pd.read_csv(csv_path, usecols=existing_columns, skiprows=get_skiprows(1000))
+
+        if df.empty:
+            return {col: [] for col in selected_columns}
+
+        # 转换 DataFrame 到记录列表
+        result_dicts = modify_records(df)
+
+        # 使用字典推导式来创建结果字典
+        temperature_time: Dict[str, List] = {
+            col: [row[col] for row in result_dicts] for col in result_dicts[0].keys()
+        }
+
+        # 日志记录
+        logging.debug(f"Original temperature_time: {temperature_time}")
+
+        # 预先构建映射表
+        key_mapping = {key: chipNamesConfig.get('chip_names', key) for key in temperature_time.keys()}
+
+        # 使用映射表替换 temperature_time 中的键
+        new_temperature_time: Dict[str, List] = {
+            key_mapping[key]: value for key, value in temperature_time.items()
+        }
+
+        # 日志记录
+        logging.debug(f"Modified temperature_time: {new_temperature_time}")
+
+        return new_temperature_time
+    except Exception as e:
+        logging.error(f"Error processing CSV file: {e}")
         return {col: [] for col in selected_columns}
-
-    result_dicts = modify_records(df)
-    # 使用字典推导式来创建结果字典
-    temperature_time: Dict[str, List] = {
-        col: [row[col] for row in result_dicts] for col in result_dicts[0].keys()
-    }
-    logging.debug(temperature_time)
-
-    # 预先构建映射表
-    key_mapping = {key: chipNamesConfig.get('chip_names', key) for key in temperature_time.keys()}
-
-    # 使用映射表替换 temperature_time 中的键
-    new_temperature_time: Dict[str, List] = {
-        key_mapping[key]: value for key, value in temperature_time.items()
-    }
-    logging.debug(new_temperature_time)
-    return new_temperature_time
 
 
 def process_sensor(sensor, temperature_time_dc1, tecu_temperatures):
@@ -197,12 +233,23 @@ def relative_difference_process(file_name: str):
     selected_columns: str = f"{selected_columns_dc1_str},{selected_columns_tc1_str},{selected_columns_tc2_str}"
     selected_columns_list: list = selected_columns.split(',')
 
-    # 使用 dask 读取数据
-    import dask.dataframe as dd
-    df: dd.DataFrame = dd.read_csv(file_name, usecols=selected_columns_list, engine='python')
+    # 使用 pandas 读取 CSV 文件的列名
+    column_names = pd.read_csv(file_name, nrows=0).columns.tolist()
+    # 过滤出 selected_columns_list 中存在的列
+    existing_columns = [col for col in selected_columns_list if col in column_names]
 
-    # 计算每列的最大值
-    column_max_values = df.max().compute().to_dict()
+    if len(existing_columns) >= 1:
+        # 使用 dask 读取数据
+        df: DataFrame = pd.read_csv(file_name, usecols=existing_columns, engine='python')
+
+        # 计算每列的最大值
+        column_max_values = df.max().to_dict()
+        del df
+    else:
+        # 如果没有匹配的列，返回空字典或抛出异常
+        column_max_values = {}
+        logging.debug("Warning: No matching columns found in the CSV file.")
+
     return column_max_values
 
 

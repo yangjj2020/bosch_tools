@@ -4,6 +4,7 @@ import logging
 import os
 import time
 
+import pandas as pd
 from asammdf import MDF
 from asammdf.blocks.utils import MdfException
 from flask import request, render_template, jsonify
@@ -53,6 +54,7 @@ def upload():
     chunk_index = int(request.form.get('chunk', 0))
     total_chunks = int(request.form.get('chunks', 1))
     file_name = request.form.get('name')
+    logging.debug(f"chunk_index:{chunk_index},total_chunks:{total_chunks},file_name:{file_name}")
 
     input_path = env_input_path
     test_team = request.form.get('test_team')
@@ -202,6 +204,7 @@ def temperature_details_data():
     selected_columns_tc2_str: str = "TC2_Th1,TC2_Th2,TC2_Th3,TC2_Th4,TC2_Th5,TC2_Th6,TC2_Th7,TC2_Th8,TC2_Th9,TC2_Th10,TC2_Th11,TC2_Th12,TC2_Th13"
     selected_columns_ett_str: str = "EnvT_t,TECU_t"
     selected_columns: str = f"{selected_columns_dc1_str},{selected_columns_tc1_str},{selected_columns_tc2_str},{selected_columns_ett_str}"
+
     temperature_time_dc1 = temperature_chip(selected_columns=selected_columns, csv_path=selected_file_names[0])
 
     temperature_time_legend: list = str_to_list(selected_columns)
@@ -261,7 +264,7 @@ def temperature_overview():
     logging.info(f"file_names:{selected_file_names}")
 
     ## TECU_t温度时长的柱形图和饼状图
-    time_diffs, total_minutes = temperature_duration(selected_file_names=selected_file_names,
+    time_diffs, total_minutes = temperature_duration(selected_file_ids = selected_file_ids,selected_file_names=selected_file_names,
                                                      max_workers=len(selected_file_names))
     # 使用排序函数
     sorted_data = dict(sorted(time_diffs.items(), key=lambda item: float(item[0].split(' ~ ')[0])))
