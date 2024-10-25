@@ -154,9 +154,12 @@ def str_to_list(sensors_str: str) -> List[str]:
     return sensors_list
 
 
-def relative_difference(selected_file_names: list[str], max_workers=None):
-    # 使用 ThreadPoolExecutor 并行处理每个文件
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+from concurrent.futures import ProcessPoolExecutor
+
+
+def relative_difference(selected_file_names: list[str] = None, max_workers=None):
+    # 使用 ProcessPoolExecutor 并行处理每个文件
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
         results = list(executor.map(relative_difference_process, selected_file_names))
         logging.debug(results)
 
@@ -175,7 +178,7 @@ def relative_difference(selected_file_names: list[str], max_workers=None):
     for chip_info in chip_dict_list:
         measured_variable = chip_info['measured_variable']
         if measured_variable in global_maxes:
-            chip_info['max_temperature'] = round(global_maxes[measured_variable],1)
+            chip_info['max_temperature'] = round(global_maxes[measured_variable], 1)
         else:
             chip_info['max_temperature'] = 0  # 或者设置为其他默认值
 
@@ -193,9 +196,13 @@ def relative_difference_process(file_name: str):
     selected_columns_tc2_str: str = "TC2_Th1,TC2_Th2,TC2_Th3,TC2_Th4,TC2_Th5,TC2_Th6,TC2_Th7,TC2_Th8,TC2_Th9,TC2_Th10,TC2_Th11,TC2_Th12,TC2_Th13"
     selected_columns: str = f"{selected_columns_dc1_str},{selected_columns_tc1_str},{selected_columns_tc2_str}"
     selected_columns_list: list = selected_columns.split(',')
-    df: DataFrame = pd.read_csv(file_name, usecols=selected_columns_list, engine='python')
+
+    # 使用 dask 读取数据
+    import dask.dataframe as dd
+    df: dd.DataFrame = dd.read_csv(file_name, usecols=selected_columns_list, engine='python')
+
     # 计算每列的最大值
-    column_max_values = df.max().to_dict()
+    column_max_values = df.max().compute().to_dict()
     return column_max_values
 
 

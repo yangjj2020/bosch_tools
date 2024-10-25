@@ -291,20 +291,22 @@ def delete_file():
 
     try:
         # 调用数据库模块删除文件
-        primary_table_name = 'measurement_file'
-        primary_param: map = {'id': file_id}
+        query_sql = 'SELECT file_name, id FROM measurement_file WHERE id = %s and status = %s'
+        params = (int(file_id), 0,)
+        measurement_file_list = query_table(db_pool, query=query_sql, params=params)
 
-        result, message = delete_from_tables(db_pool, table=primary_table_name,
-                                             param=primary_param)
+        # 遍历查询结果，删除文件并更新数据库
+        for record in measurement_file_list:
+            file_name = record['file_name']
+            file_id = record['id']
+
+            # 删除文件系统中的文件
+            delete_file_from_system(file_name)
+
+            result, message = delete_from_tables(db_pool, table='measurement_file', param={'id': file_id})
+
         if result:
-            second_table_name = 'chip_temperature'
-            second_param: map = {'file_id': file_id}
-            result, message = delete_from_tables(db_pool, table=second_table_name,
-                                                 param=second_param)
-            if result:
-                return jsonify({'success': True, 'message': '文件删除成功'})
-            else:
-                return jsonify({'success': False, 'message': '文件删除失败'})
+            return jsonify({'success': True, 'message': '文件删除成功'})
         else:
             return jsonify({'success': False, 'message': '文件删除失败'})
     except Exception as e:
@@ -328,3 +330,14 @@ def get_key(item):
     start_time: str = item.split('~')[0]  # 分割时间区间，获取起始时间
     start_time: str = start_time.strip()
     return int(start_time)  # 转换为整数以便排序
+
+
+# 删除文件系统中的文件
+def delete_file_from_system(file_name: str):
+    input_file = os.path.join(env_input_path, 'HTM', file_name + '.dat')
+    if os.path.exists(input_file):
+        os.remove(input_file)
+
+    output_file = os.path.join(env_output_path, 'HTM', file_name + '.csv')
+    if os.path.exists(output_file):
+        os.remove(output_file)
